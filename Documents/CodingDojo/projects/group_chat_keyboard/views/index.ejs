@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>The Collab-o-Lab</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <style>
+        /* normalizing for Firefox: */
+
+        hr {
+            box-sizing: content-box;
+            height: 0;
+            overflow: visible;
+        }
+
+        button::-moz-focus-inner,
+        [type="button"]::-moz-focus-inner,
+        [type="reset"]::-moz-focus-inner,
+        [type="submit"]::-moz-focus-inner {
+            border-style: none;
+            padding: 0;
+        }
+
+        button,
+        select {
+            text-transform: none;
+        }
+
+        progress {
+            vertical-align: baseline;
+        }
+
+        /* My actual CSS: */
+
+        body {
+            background-color: #5897B2;
+        }
+
+        #wrapper {
+            margin: 5px auto 0px;
+            padding: 15px 14px 0px 16px;
+            width: 672px;
+            box-sizing: border-box;
+        }
+
+        #chatbox {
+            width: 639px;
+            height: 300px;
+            border: 2px solid black;
+            box-sizing: border-box;
+            overflow: scroll;
+            background-color: white;
+        }
+
+        #text_input {
+            width: 639px;
+            height: 20px;
+            margin: 5px 0px;
+            border: 2px solid black;
+            box-sizing: border-box;
+        }
+
+        #text_input_background {
+            width: 639px;
+            background-color: #98AE72;
+        }
+
+        #toggle_bar {
+            height: 60px;
+            width: 639px;
+            box-sizing: border-box;
+            margin: 0px auto;
+            padding: 3px;
+            text-align: center;
+            background-color: #98AE72;
+        }
+
+        #bottom_section {
+            background-color: red;
+            width: 639px;
+            padding: 10px 0px;
+            margin: 0px auto;
+            opacity: 0.3;
+        }
+
+        #tilde_image {
+            height: 50px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        #send_text {
+            margin: 0px 0px 0px 579px;
+            width: 60px;
+            text-align: center;
+        }
+
+        h2,
+        h4,
+        p {
+            margin: 2px;
+        }
+
+        #send_button_no_margin {
+            margin: 0px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0, 0, 0);
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 400px;
+            height: 100px;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #chat_name {
+            height: 20px;
+            width: 394px;
+            margin: 5px 0px;
+            box-sizing: border-box
+        }
+
+        #keyboard {
+            margin: 0px auto;
+            width: 500px;
+            height: 110px;
+        }
+
+        #E3 {
+            border-right-color: black;
+        }
+        .logo {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #logo_wrapper {
+            width: 639px;
+        }
+
+        .red_text {
+            color: #EC5470;
+        }
+
+        .blue_text {
+            color: #5897B2;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Actual webpage here: -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <h2>Enter your name:</h2>
+            <input type="text" id="chat_name">
+            <button id="send_name">
+                <h2 id="send_button_no_margin">Let's Collab!</h2>
+            </button>
+        </div>
+    </div>
+
+    <div id='wrapper'>
+        <div class="logo" id="logo_wrapper">
+            <img class="logo" src="The-Collab-o-Lab.png" />
+        </div>
+        <div id='chatbox'></div>
+        <div id="text_input_background">
+            <input type="text" id="text_input">
+            <button id="send_text">
+                <h2>Send</h2>
+            </button>
+        </div>
+    </div>
+
+    <div id="toggle_bar"></div>
+
+    <div id="bottom_section">
+        <div id="keyboard"></div>
+    </div>
+
+    <!-- Boatloads of Javascript: -->
+    <script>
+        var modal = document.getElementById('myModal');
+        var button = document.getElementById("send_name");
+        var button2 = document.getElementById("send_text");
+        var messages = document.getElementById("chatbox");
+        var current_user;
+        var chat_play_toggle = 'chat';
+        var text_input = document.getElementById("text_input");
+        var keyboard_div = document.getElementById("keyboard");
+        var name_input = document.getElementById("chat_name");
+        var toggle_bar = document.getElementById("toggle_bar");
+
+        $(document).ready(function () {
+            //listener for the ~ key to toggle between chat and musical typing
+            document.addEventListener("keydown", function (event) {
+                if (event.keyCode == 192) {
+                    event.preventDefault();
+                    if (chat_play_toggle == 'chat') {
+                        toggleToMusic();
+                    } else {
+                        toggleToChat();
+                    }
+                }
+            });
+
+            toggle_bar.onclick = function (event) {
+                    if (chat_play_toggle == 'chat') {
+                        toggleToMusic();
+                    } else {
+                        toggleToChat();
+                    }
+            };
+
+            var toggleToChat = function toggleToChat() {
+                chat_play_toggle = 'chat';
+                document.getElementById("keyboard").disabled = true;
+                document.getElementById("wrapper").enabled = true;
+                text_input.disabled = false;
+                text_input.focus();
+                bottom_section.style.backgroundColor = 'red';
+                bottom_section.style.opacity = 0.3;
+                text_input_background.style.backgroundColor = '#98AE72';
+                text_input_background.style.opacity = 1;
+                document.getElementById("toggle_bar").innerHTML = '<h2>Click here or press <img id="tilde_image" src="tildekeyimage.jpg"> to toggle to musical typing</h2>';
+            }
+
+            toggleToChat();
+
+            var toggleToMusic = function toggleToMusic() {
+                chat_play_toggle = 'music';
+                document.getElementById("keyboard").enabled = true;
+                document.getElementById("wrapper").disabled = true;
+                keyboard_div.focus();
+                text_input.disabled = true;
+                bottom_section.style.backgroundColor = '#98AE72';
+                bottom_section.style.opacity = 1;
+                text_input_background.style.backgroundColor = 'red';
+                text_input_background.style.opacity = 0.3;
+                document.getElementById("toggle_bar").innerHTML = '<h2>Click here or press <img id="tilde_image" src="tildekeyimage.jpg"> to toggle to chat typing</h2>';
+            }
+
+            var socket = io();
+
+            //Make modal appear on page load
+            modal.style.display = "block";
+            name_input.focus();
+            socket.emit('new_screen', { msg: 'Newbie here!' });
+
+            socket.on('new_screen', function (chat_log) {
+                $('#chatbox').append(chat_log);
+            });
+
+            //User submits name in modal
+            button.onclick = function () {
+                name = $('#chat_name').val()
+                if (name.length < 1) {
+                    return false;
+                } else {
+                    socket.emit('new_user', name)
+                    modal.style.display = "none";
+                    text_input.focus();
+                }
+            }
+
+            //User submits text in chat
+            button2.onclick = function () {
+                text_string = $('#text_input').val()
+                if (text_string.length < 1) {
+                    return false
+                } else {
+                    socket.emit('new_message', { msg: text_string, id: current_user })
+                    $('#text_input').val('');
+                }
+            }
+
+            $(document).keypress(function (e) {
+                //Listening for the enter button
+                if (e.which == 13) {
+                    //if the modal is open, make the enter button press the send button on modal
+                    if (modal.style.display == "block") {
+                        name = $('#chat_name').val()
+                        if (name.length < 1) {
+                            return false;
+                        } else {
+                            socket.emit('new_user', name)
+                            modal.style.display = "none";
+                            text_input.focus();
+                        }
+                    //if the modal is closed, make the enter button press the send button on chat box
+                    } else {
+                        text_string = $('#text_input').val()
+                        if (text_string.length < 1) {
+                            return false
+                        } else {
+                            socket.emit('new_message', { msg: text_string, id: current_user })
+                            $('#text_input').val('');
+                        }
+                    }
+                }
+            });
+
+            socket.on('greeting', function (data) {
+                socket.emit('thankyou', { msg: 'Connection confirmed! -Client' });
+            });
+
+            socket.on('render_users', function (sid) {
+                current_user = sid;
+            });
+
+            socket.on('render_chat', function (output_data) {
+                if (output_data.id == current_user) {
+                    message_log = '<b class="red_text">'+output_data.message_sender+':</b> '+output_data.message+'<br><br>';
+                } else {
+                    message_log = '<b class="blue_text">'+output_data.message_sender+':</b> '+output_data.message+'<br><br>';
+                }
+                $('#chatbox').append(message_log);
+                messages.scrollTop = messages.scrollHeight;
+            });
+
+            //Keyboard stuff -----------------------------
+            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+
+            var context = new AudioContext(),
+                settings = {
+                    id: 'keyboard',
+                    width: 600,
+                    height: 150,
+                    startNote: 'C2',
+                    whiteNotesColour: '#fff',
+                    blackNotesColour: '#000',
+                    borderColour: '#000',
+                    activeColour: 'red',
+                    octaves: 1.416
+                },
+                keyboard = new QwertyHancock(settings);
+
+            masterGain = context.createGain();
+            nodes = [];
+
+            masterGain.gain.value = 0.3;
+            masterGain.connect(context.destination);
+
+            //This section will allow users to enable audio on iOS devices
+            if (context.state === 'suspended' && 'ontouchstart' in window)
+            {
+                var unlock = function()
+                {
+                    context.resume().then(function()
+                    {
+                        document.body.removeEventListener('touchstart', unlock);
+                        document.body.removeEventListener('touchend', unlock);
+                    });
+                };
+
+                document.body.addEventListener('touchstart', unlock, false);
+                document.body.addEventListener('touchend', unlock, false);
+            }
+
+            keyboard.keyDown = function (note, frequency) {
+                if (chat_play_toggle == 'chat') {
+                    return false;
+                } else {
+                    socket.emit('note_play', { note: note, frequency: frequency })
+                }
+            };
+
+            socket.on('note_play', function (data) {
+                var oscillator = context.createOscillator();
+                oscillator.type = 'square';
+                oscillator.frequency.value = data.frequency;
+                oscillator.connect(masterGain);
+                oscillator.start(0);
+
+                nodes.push(oscillator);
+                lightenUp(data.note);
+            })
+
+            keyboard.keyUp = function (note, frequency) {
+                if (chat_play_toggle == 'chat') {
+                    return false;
+                } else {
+                    socket.emit('note_off', { note: note, frequency: frequency })
+                }
+            };
+
+            socket.on('note_off', function (data) {
+                var new_nodes = [];
+
+                for (var i = 0; i < nodes.length; i++) {
+                    if (Math.round(nodes[i].frequency.value) === Math.round(data.frequency)) {
+                        nodes[i].stop(0);
+                        nodes[i].disconnect();
+                        darkenDown(data.note);
+                    } else {
+                        new_nodes.push(nodes[i]);
+                    }
+                }
+                nodes = new_nodes;
+            })
+
+            /**
+             * Lighten up man. Change the colour of a key.
+             * @param  {element} el DOM element to change colour of.
+             */
+            var lightenUp = function lightenUp(note) {
+                el = document.getElementById(note);
+                if (el !== null || typeof el === undefined) {
+                    el.style.backgroundColor = settings.activeColour;
+                }
+            };
+
+            /**
+             * Revert key to original colour.
+             * @param  {element} el DOM element to change colour of.
+             */
+            var darkenDown = function darkenDown(note) {
+                el = document.getElementById(note);
+                if (el !== null) {
+                    if (el.getAttribute('data-note-type') === 'white') {
+                        el.style.backgroundColor = 'white';
+                    } else {
+                        el.style.backgroundColor = 'black';
+                    }
+                }
+            };
+
+
+        });
+    </script>
+    <script src="qwerty-hancock.js"></script>
+</body>
+
+</html>
